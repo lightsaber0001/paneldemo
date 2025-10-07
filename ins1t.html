@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gelişmiş Attack Paneli</title>
+    <!-- Tailwind CSS Yüklemesi -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js (Ses Kütüphanesi) Yüklemesi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <!-- Terminal Fontu Yüklemesi (VT323) -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    
+    <style>
+        /* VT323 Fontu ve Siber Tema Stilleri */
+        body {
+            font-family: 'VT323', monospace; 
+            background-color: #111111; /* Koyu Gri/Siyah Arka Plan */
+            color: #00ff00; /* Neon Yeşil Metin */
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* Scanline Efekti (Daha İnandırıcı Retro Görünüm) */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: 
+                repeating-linear-gradient(
+                    to bottom,
+                    rgba(0, 0, 0, 0) 0px, 
+                    rgba(0, 0, 0, 0.5) 1px, 
+                    rgba(0, 0, 0, 0) 2px
+                );
+            z-index: 99; 
+        }
+
+        /* Matrix Kanvas Stilleri: Arka plana sabitler */
+        #matrixCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1; 
+            opacity: 0.3; 
+        }
+
+        /* Ana Vurgu Rengi (Neon Yeşil) */
+        .text-accent-green {
+            color: #00ff00;
+            text-shadow: 0 0 5px #00ff00;
+        }
+        /* İkincil Vurgu Rengi (Cyber Mavi/Cyan) */
+        .text-accent-blue {
+            color: #00FFFF;
+            text-shadow: 0 0 5px #00FFFF;
+        }
+        
+        /* Kart arka planı */
+        .bg-card-bg {
+            background-color: rgba(10, 10, 10, 0.95); 
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1); 
+        }
+        /* Sınır ve inputlar için yeşil/mavi çerçeve */
+        .border-color {
+            border-color: #004d00;
+        }
+
+        /* Parıltılı buton efekti */
+        .glow-button {
+             background-color: #00ff00;
+             color: #111111;
+             transition: all 0.3s ease;
+             text-shadow: none;
+        }
+        .glow-button:hover {
+            box-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+        }
+        
+        /* Başarı Metni Parıltısı */
+        .success-glow {
+            text-shadow: 0 0 20px #00ff00, 0 0 40px #00ff00, 0 0 60px rgba(0, 255, 0, 0.5);
+        }
+
+        /* Progress Bar (Metrikler için) */
+        .progress-bar-fill {
+            transition: width 0.5s ease-out;
+            background-color: #00FFFF; /* Mavi vurgu */
+            box-shadow: 0 0 5px #00FFFF;
+        }
+        
+        /* CSS Tabanlı Sansürlü Fragment Stili (SVG YOK!) */
+        .censored-fragment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border: 2px solid #00FFFF; /* Mavi/Cyan çerçeve */
+            background-color: rgba(0, 255, 255, 0.1); /* Hafif mavi arka plan */
+            box-shadow: 0 0 10px #00FFFF, 0 0 20px rgba(0, 255, 255, 0.4); 
+            color: #FFFFFF; /* Beyaz yazı */
+            font-size: 1.5rem; /* Büyük yazı */
+            font-weight: bold;
+            transition: border-color 0.05s ease, box-shadow 0.05s ease, opacity 0.05s ease;
+            cursor: not-allowed;
+            /* Ekstra siber görünüm */
+            position: relative;
+            overflow: hidden;
+            
+            /* Başlangıçta Görünürlük için Opaklık 1.0 olarak ayarlandı */
+            opacity: 1.0; 
+            /* JavaScript ile oluşturulmadığı için bu stiller doğrudan HTML'e uygulanacak */
+        }
+        
+        .censored-fragment::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* Çapraz çizgiler ve glitch deseni */
+            background: linear-gradient(45deg, transparent 48%, #FF00FF 50%, transparent 52%),
+                        linear-gradient(-45deg, transparent 48%, #FF00FF 50%, transparent 52%);
+            background-size: 10px 10px;
+            opacity: 0.15;
+        }
+
+
+        /* Matrix spinner stili */
+        .spinner {
+            border-top-color: #00ff00;
+            border-left-color: #00ff00;
+            border-bottom-color: #00ff00;
+        }
+
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'accent-green': '#00ff00',
+                        'accent-blue': '#00FFFF',
+                        'card-bg': 'rgba(10, 10, 10, 0.95)',
+                        'border-color': '#004d00',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen flex flex-col items-center">
+
+    <!-- 1. BAŞLANGIÇ TIKLAMA EKRANI (SES İÇİN GEREKLİ) -->
+    <div id="bootScreen" class="fixed inset-0 flex items-center justify-center cursor-pointer bg-black" onclick="startApplication()">
+        <div id="bootMessages" class="text-accent-green boot-message text-center">
+            <p class="text-4xl font-extrabold animate-pulse" style="text-shadow: 0 0 15px #00ff00, 0 0 30px #00ff00;">
+                >>> SİSTEMİ BAŞLATMAK İÇİN TIKLAYIN <<<
+            </p>
+        </div>
+    </div>
+    
+    <!-- MATRIX KANVASI (Arka Plan) -->
+    <canvas id="matrixCanvas"></canvas>
+    
+    <!-- Başarı Animasyonu Ekranı -->
+    <div id="successOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 hidden">
+        <div class="text-center">
+            <h2 class="text-7xl md:text-9xl font-extrabold text-accent-green animate-pulse success-glow">
+                <span style="display: inline-block;" id="successText"></span>
+            </h2>
+            <p class="text-xl md:text-2xl mt-4 text-gray-400">[VERİ AKIŞI TAMAMLANDI - SONUÇLAR ANALİZ EDİLİYOR]</p>
+        </div>
+    </div>
+
+    <!-- Ana Konteyner - Başlangıçta Gizli -->
+    <div id="mainContent" class="hidden w-full max-w-5xl relative z-20 p-4 md:p-8 pt-12">
+        
+        <!-- BAŞLIK VE METRİKLER (Dashboard Alanı) -->
+        <header class="text-center mb-8">
+            <h1 class="text-6xl font-extrabold text-accent-green mb-2">[$ GİZLİ VERİ ANALİZ PROTOKOLÜ]</h1>
+            <p class="text-accent-green text-lg border-b border-004d00 pb-2">Gelişmiş Düzey Attack Paneli v3.6 (Developer Lyrex0001)</p>
+        </header>
+
+        <!-- CANLI SİSTEM METRİKLERİ -->
+        <div class="bg-card-bg p-4 rounded-xl shadow-inner border border-color mb-8">
+            <p class="text-accent-blue text-xl mb-3 border-b border-accent-blue pb-1">[>> CANLI SİSTEM METRİKLERİ <<]</p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                
+                <div id="metric-cpu" class="metric-item">
+                    <span class="text-gray-500">CPU YÜKÜ:</span> <span class="text-accent-green float-right">15%</span>
+                    <div class="w-full h-2 bg-black border border-color mt-1"><div class="progress-bar-fill h-full" style="width: 15%;"></div></div>
+                </div>
+                <div id="metric-conn" class="metric-item">
+                    <span class="text-gray-500">BAĞLANTI SAYISI:</span> <span class="text-accent-blue float-right">120</span>
+                    <div class="w-full h-2 bg-black border border-color mt-1"><div class="progress-bar-fill h-full" style="width: 60%;"></div></div>
+                </div>
+                <div id="metric-latency" class="metric-item">
+                    <span class="text-gray-500">GECİKME (ms):</span> <span class="text-accent-green float-right">4.2ms</span>
+                    <div class="w-full h-2 bg-black border border-color mt-1"><div class="progress-bar-fill h-full" style="width: 30%;"></div></div>
+                </div>
+                <div id="metric-storage" class="metric-item">
+                    <span class="text-gray-500">KULLANILAN DEPOLAMA:</span> <span class="text-accent-blue float-right">38TB</span>
+                    <div class="w-full h-2 bg-black border border-color mt-1"><div class="progress-bar-fill h-full" style="width: 80%;"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SORGULAMA ARAYÜZÜ -->
+        <div class="bg-card-bg p-6 rounded-2xl border border-color mb-8">
+            <p class="text-accent-blue text-xl mb-4 border-b border-accent-blue pb-1">[>> SORGULAMA PARAMETRELERİ <<]</p>
+            
+            <div class="mb-4">
+                <label for="protocolSelect" class="text-gray-500">VERİ ALIM PROTOKOLÜ SEÇİN:</label>
+                <select id="protocolSelect" class="w-full p-3.5 mt-1 bg-black text-accent-green border border-color rounded-xl focus:ring-1 focus:ring-accent-green focus:border-accent-green">
+                    <option value="TCP" class="bg-black text-accent-green">P-SECURE / TCP-DUMP (Yüksek Gizlilik)</option>
+                    <option value="UDP" class="bg-black text-accent-green">W-STREAM / UDP-FORCE (Yüksek Hız)</option>
+                    <option value="SSH" class="bg-black text-accent-green">S-GHOST / SSH-INJECTION (Gelişmiş)</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                <input
+                    type="text"
+                    id="profileName"
+                    placeholder=">> HEDEF KULLANICI ADI VEYA ID GİRİN (Min 3 Karakter)"
+                    class="flex-grow p-3.5 bg-black text-accent-green border border-color rounded-xl focus:ring-1 focus:ring-accent-green focus:border-accent-green transition duration-300 placeholder-gray-700"
+                >
+                <button
+                    id="searchButton"
+                    onclick="searchProfile()"
+                    class="w-full md:w-auto px-6 py-3 font-semibold rounded-xl transform active:scale-[0.98] glow-button"
+                >
+                    <span id="buttonText">AKTİF VERİ AKIŞINI BAŞLAT</span>
+                    <div id="loadingSpinner" class="hidden w-5 h-5 border-2 border-black rounded-full spinner animate-spin mx-auto"></div>
+                </button>
+            </div>
+            <p id="errorMessage" class="text-red-600 mt-3 hidden text-sm font-medium text-shadow-none"></p>
+        </div>
+
+        <!-- KİMLİK FRAGMENTLERİ & LOG ALANI -->
+        <div class="bg-card-bg p-4 rounded-xl border border-color mb-12">
+            <p class="text-accent-blue text-xl mb-3 border-b border-accent-blue pb-1">[>> HEDEF KİMLİK FRAGMENTLERİ <<]</p>
+            
+            <!-- Fragmentler için sabit yükseklik belirlendi (h-40 = 160px) -->
+            <div id="imageFragmentsContainer" class="flex justify-center space-x-4 mb-4 h-40 items-center">
+                
+                <!-- FRAGMENTLER ARTIK DOĞRUDAN HTML'E GÖMÜLÜDÜR. JS İLE OLUŞTURULMAYACAK. -->
+                <div class="w-32 h-32 rounded-2xl censored-fragment">HEDEF</div>
+                <div class="w-32 h-32 rounded-2xl censored-fragment">USER_ID</div>
+                <div class="w-32 h-32 rounded-2xl censored-fragment">LOKASYON</div>
+                <div class="w-32 h-32 rounded-2xl censored-fragment">SECURE_KEY</div>
+                <div class="w-32 h-32 rounded-2xl censored-fragment">PROTOKOL</div>
+                
+            </div>
+            
+            <p class="text-accent-blue text-xl mb-3 border-b border-accent-blue pb-1">[>> SİSTEM ETKİLEŞİM LOGLARI <<]</p>
+            <!-- Log Alanı -->
+            <div id="logArea" class="max-h-96 overflow-y-auto pt-2">
+                <p class="text-gray-500 text-sm">[$ SİSTEM HAREKETSİZ] Hazırlık için parametreleri girin ve akışı başlatın.</p>
+            </div>
+        </div>
+
+        <!-- Telif Hakkı (Alt Bilgi) -->
+        <footer class="text-center mt-12 text-gray-700 text-sm">
+            [2025 Attack Panel Bu Panel Gizli Bir Paneldir Hiç Bir Şekilde Sorumluk Kabul Etmiyoruz!!!!]
+        </footer>
+    </div>
+    <!-- Ana Konteyner SONU -->
+
+
+    <script>
+        const profileInput = document.getElementById('profileName');
+        const searchButton = document.getElementById('searchButton');
+        const buttonText = document.getElementById('buttonText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const errorMessage = document.getElementById('errorMessage');
+        const logArea = document.getElementById('logArea');
+        const bootScreen = document.getElementById('bootScreen');
+        const mainContent = document.getElementById('mainContent');
+        const bootMessagesDiv = document.getElementById('bootMessages');
+        const protocolSelect = document.getElementById('protocolSelect');
+        const fragmentsContainer = document.getElementById('imageFragmentsContainer');
+
+        const metricElements = {
+            cpu: document.getElementById('metric-cpu'),
+            conn: document.getElementById('metric-conn'),
+            latency: document.getElementById('metric-latency'),
+            storage: document.getElementById('metric-storage'),
+        };
+        
+        let synth = null;
+        let volume = null;
+        let bgmLoop = null;
+        let bootSynth = null;
+        let metricsInterval = null; 
+        let flickerInterval = null; 
+
+        // --- MATRIX EFEKTİ KODU BAŞLANGICI ---
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        const font_size = 18;
+        const columns = width / font_size; 
+        const drops = []; 
+        
+        for (let x = 0; x < columns; x++) {
+            drops[x] = 1;
+        }
+
+        const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+-=[]{};:|,./<>?';
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(17, 17, 17, 0.05)'; 
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.font = font_size + 'px VT323';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = characters.charAt(Math.floor(Math.random() * characters.length));
+                ctx.fillStyle = '#00ff00';
+                ctx.fillText(text, i * font_size, drops[i] * font_size);
+
+                if (drops[i] * font_size > height && Math.random() > 0.975) {
+                    drops[i] = 0; 
+                } else {
+                    drops[i]++; 
+                }
+            }
+        }
+        
+        setInterval(drawMatrix, 50);
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            const newColumns = width / font_size;
+            drops.length = 0;
+            for (let x = 0; x < newColumns; x++) {
+                drops[x] = 1;
+            }
+        });
+        
+        // --- MATRIX EFEKTİ KODU SONU ---
+
+
+        // --- TONE.JS SES KODU ---
+        function initAudio() {
+            if (Tone.context.state !== 'running') {
+                 Tone.context.resume(); 
+            }
+
+            if (!synth) {
+                volume = new Tone.Gain(0.05).toDestination(); 
+
+                synth = new Tone.Synth({
+                    oscillator: { type: 'square' },
+                    envelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.1 }
+                }).connect(volume); 
+                
+                bootSynth = new Tone.Synth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.3 }
+                }).toDestination();
+                bootSynth.volume.value = -10; 
+
+                // Arka Plan Müziği (Drone)
+                const filter = new Tone.Filter(200, "lowpass").toDestination(); 
+                const reverb = new Tone.Reverb({ decay: 10, preDelay: 0.2 }).connect(filter); 
+                reverb.wet.value = 0.5;
+                reverb.generate();
+                
+                const darkSynth = new Tone.AMSynth({
+                    harmonicity: 3.99,
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 4, decay: 0.1, sustain: 1, release: 2 },
+                    modulation: { type: "square" },
+                    modulationEnvelope: { attack: 2, decay: 0.01, sustain: 1, release: 0.01 },
+                    volume: -20 
+                }).connect(reverb); 
+                
+                const darkNotes = [["C1"], ["G1", "A#1"], ["F1", "A1"]];
+                let noteIndex = 0;
+
+                bgmLoop = new Tone.Loop(time => {
+                    const notesToPlay = darkNotes[noteIndex % darkNotes.length];
+                    darkSynth.triggerAttackRelease(notesToPlay, "2n", time); 
+                    noteIndex++;
+                }, "2n").start(0); 
+                
+                Tone.Transport.stop(); 
+            }
+        }
+        
+        function setVolumeGain(level) {
+            if (volume) {
+                volume.gain.rampTo(level, 0.05); 
+            }
+        }
+
+        function playTypeSound() {
+            if (synth) {
+                const freq = 600 + Math.random() * 100; 
+                synth.triggerAttackRelease(freq, "64n");
+            }
+        }
+        // --- TONE.JS SES KODU SONU ---
+
+        
+        // --- BAŞLATMA UYGULAMASI VE BOOT ANIMASYONU ---
+        function startApplication() {
+            initAudio(); 
+            bootScreen.onclick = null;
+            bootScreen.classList.remove('cursor-pointer');
+            bootMessagesDiv.innerHTML = '';
+            
+            startBootSequenceAnimation(); 
+        }
+
+        const bootSequenceMessages = [
+            "  MATRIX V4.0.1 KERNEL BAŞLATILIYOR... [BAĞLANTI BAŞARILI]",
+            "  SİSTEM SAATİ AYARI: 2099/10/07 08:02:45 UTC",
+            "  CPU: D-CORE QUANTUM PROCESSOR [OK] - HIZ: 98 PFLOP/s",
+            "  NEURAL NETWORK KONTROLÜ: STABİL. 128TB CACHE AKTİF.",
+            "  [!] GÜVENLİK PROTOKOLÜ: GİZLİ MOD DEVREDE. LOGLAMA KAPALI.",
+            "  DATASTREAM INITIATION: GİZLİ VERİ AKIŞI TÜNELİ OLUŞTURULUYOR...",
+            "  A.I. DANIŞMANI: Arayüz Hazır.",
+            "\n\n\n  [$ SİSTEM SORGULAMA PANELLERİ YÜKLENİYOR...]",
+        ];
+
+        async function typeBootMessage(message) { 
+            const speed = 15; 
+            let currentText = bootMessagesDiv.textContent;
+            
+            for (let char of message) {
+                currentText += char;
+                bootMessagesDiv.textContent = currentText;
+                
+                if (bootSynth) {
+                    bootSynth.triggerAttackRelease("C5", "64n");
+                }
+                await new Promise(resolve => setTimeout(resolve, speed)); 
+            }
+            bootMessagesDiv.textContent += '\n'; 
+        }
+
+        async function startBootSequenceAnimation() {
+            for (let msg of bootSequenceMessages) {
+                await typeBootMessage(msg);
+                await new Promise(resolve => setTimeout(resolve, 100)); 
+            }
+
+            bootMessagesDiv.innerHTML = `<p class="text-center text-4xl mt-12 font-extrabold text-white animate-pulse" style="text-shadow: 0 0 15px #00ff00, 0 0 30px #00ff00;">GİRİŞ BAŞARILI. ANA PANELE GEÇİLİYOR...</p>`;
+            
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            finishBootSequence(); 
+        }
+        
+        function finishBootSequence() {
+            Tone.Transport.start(); 
+
+            bootScreen.style.opacity = 0;
+            bootScreen.style.pointerEvents = 'none';
+            
+            mainContent.classList.remove('hidden');
+            
+            // Canlı Metrik ve Görsel Fragmentleri başlat
+            startMetricsUpdate();
+            // initializeImageFragments(); // Artık fragmentler HTML'de statik olarak tanımlı.
+        }
+        
+        // --- CANLI METRİK GÜNCELLEMELERİ ---
+        function updateMetrics() {
+            // CPU YÜKÜ (10-40%)
+            const cpu = (Math.random() * 30 + 10).toFixed(1);
+            metricElements.cpu.querySelector('span:last-child').textContent = `${cpu}%`;
+            metricElements.cpu.querySelector('.progress-bar-fill').style.width = `${cpu}%`;
+
+            // BAĞLANTI SAYISI (100-500)
+            const conn = Math.floor(Math.random() * 400 + 100);
+            metricElements.conn.querySelector('span:last-child').textContent = conn;
+            metricElements.conn.querySelector('.progress-bar-fill').style.width = `${(conn / 500) * 100}%`;
+
+            // GECİKME (1.0-8.0 ms)
+            const latency = (Math.random() * 7 + 1).toFixed(1);
+            metricElements.latency.querySelector('span:last-child').textContent = `${latency}ms`;
+            metricElements.latency.querySelector('.progress-bar-fill').style.width = `${(latency / 10) * 100}%`;
+
+            // KULLANILAN DEPOLAMA (30-90 TB)
+            const storage = Math.floor(Math.random() * 60 + 30);
+            metricElements.storage.querySelector('span:last-child').textContent = `${storage}TB`;
+            metricElements.storage.querySelector('.progress-bar-fill').style.width = `${storage}%`;
+        }
+
+        function startMetricsUpdate() {
+            updateMetrics(); 
+            metricsInterval = setInterval(updateMetrics, 1500); 
+        }
+
+        // --- FRAGMENT TİTREŞİM (FLICKER) KODU ---
+        
+        function startImageFlicker() {
+            // Doğrudan HTML'den çekilen elementleri hedefle
+            const fragments = document.querySelectorAll('.censored-fragment');
+            
+            flickerInterval = setInterval(() => {
+                fragments.forEach(div => {
+                    // Opaklık rastgele kaydırılır
+                    div.style.opacity = (Math.random() * 0.5 + 0.5).toFixed(2); // 0.5 ile 1.0 arası
+                    
+                    // Rastgele renk kayması (glitch)
+                    if (Math.random() < 0.05) {
+                        div.style.borderColor = '#FF00FF'; // Magenta glitch border
+                        div.style.boxShadow = '0 0 15px #FF00FF';
+                        div.style.transform = `skewX(${Math.floor(Math.random() * 5) - 2}deg) scale(0.95)`; 
+                    } else {
+                        div.style.borderColor = '#00FFFF'; // Normal blue border
+                        div.style.boxShadow = '0 0 10px #00FFFF, 0 0 20px rgba(0, 255, 255, 0.4)';
+                        div.style.transform = `skewX(0deg) scale(1.0)`; 
+                    }
+                });
+            }, 50); // Daha hızlı titreşim
+        }
+
+        function stopImageFlicker() {
+            clearInterval(flickerInterval);
+            const fragments = document.querySelectorAll('.censored-fragment');
+            fragments.forEach(div => {
+                 // Tarama bittiğinde sansür tamamen kalkmış gibi
+                 div.style.opacity = '1.0';
+                 div.style.borderColor = '#00ff00'; // Yeşil tamamlanma rengi
+                 div.style.boxShadow = '0 0 15px #00ff00, 0 0 30px rgba(0, 255, 0, 0.6)'; // Yeşil tamamlanma gölgesi
+                 div.style.transform = 'skewX(0deg) scale(1.0)'; // Eğim ve ölçeği sıfırla
+            });
+        }
+        
+        // --- ANA SORGULAMA KODU ---
+
+        const logMessages = (protocol) => [
+            `[$ SİSTEM İSTEĞİ] Protokol: ${protocol} ile Varlık Taraması Başlatıldı. Hedef: [KULLANICI_ADI]...`,
+            '[STAGE 1/15] DNS & IP Çözümlemesi: OK. Dinamik TTL Jitter Analizi: 0.07ms',
+            '[STAGE 2/15] S-CORE: Çok Katmanlı Güvenlik Bypass. Kernel Erişim Bloğu Kaldırıldı. [STATUS: 200]',
+            '[STAGE 3/15] PROTOCOL_3D: Anahtarlama Anahtarı Yükleniyor... [KEY: 0x8C5F6A_DYN]',
+            '[STAGE 4/15] DATA_LINK: Kuantum Sıkıştırmalı Bağlantı Kuruldu. Band Genişliği: Yüksek.',
+            '[STAGE 5/15] AUTH_TOKEN_CAPTURE: Geçici bellekten oturum ve yetki tokenları ayıklanıyor. %78.',
+            '[STAGE 6/15] FİLTRE: Gelişmiş Meta Veri Ayıklama. Encrypted Packet Reconstruction. (KİMLİK FRAGMENTLERİ ALINIYOR...)',
+            '[STAGE 7/15] GEOLOC_SCAN: Konum Etiketleri Çözümlendi. Son Aktif Koordinatlar Kaydedildi. (Hassasiyet: 1.5m)',
+            '[STAGE 8/15] GÖNDERİ İŞLEME: 5000+ girdi taranıyor. A.I. Anomali Tespiti: [PASSED].',
+            '[STAGE 9/15] HESAP BÜTÜNLÜĞÜ: Aktivite Sıklığı ve Profil Oluşturma Tamamlandı.',
+            '[STAGE 10/15] SYSTEM_CLEANUP: Erişim izleri siliniyor. Log dosyaları S-Ghost ile yeniden yazılıyor...',
+            '[STAGE 11/15] ÇIKIŞ PROTOKOLÜ: Tünel Kapatılıyor. Proxy Zinciri Devreden Çıkarıldı.',
+            '[STAGE 12/15] VERİ BÜTÜNLÜĞÜ: 100% Onaylandı.',
+            '[STATUS: COMPLETE] Ana Veri Paketi İndirildi. Arayüz Yükleniyor.'
+        ];
+
+
+        function toggleLoading(isLoading) {
+            searchButton.disabled = isLoading;
+            profileInput.disabled = isLoading; 
+            protocolSelect.disabled = isLoading;
+            if (isLoading) {
+                buttonText.classList.add('hidden');
+                loadingSpinner.classList.remove('hidden');
+            } else {
+                buttonText.classList.remove('hidden');
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        // Karakter karakter yazma işlevi (ana log için)
+        function typeLogMessage(message, delay = 30) { 
+            return new Promise(resolve => {
+                const logLine = document.createElement('p');
+                logLine.className = 'text-sm mb-1';
+                logArea.appendChild(logLine);
+                logArea.scrollTop = logArea.scrollHeight; 
+
+                let i = 0;
+                const typingInterval = setInterval(() => {
+                    if (i < message.length) {
+                        logLine.textContent += message[i];
+                        playTypeSound(); 
+                        i++;
+                    } else {
+                        clearInterval(typingInterval);
+                        setTimeout(resolve, 50); 
+                    }
+                }, delay); 
+            });
+        }
+        
+        async function startLog() {
+            const selectedProtocol = protocolSelect.value;
+            const messages = logMessages(selectedProtocol);
+
+            setVolumeGain(0.05); // Klavye sesini aç
+            logArea.innerHTML = '';
+            
+            // Log başlarken görsel titreşimi başlat
+            startImageFlicker();
+
+            for (let i = 0; i < messages.length; i++) {
+                let logText = messages[i];
+                
+                if (i === 0) {
+                    const name = profileInput.value.trim().toLowerCase().replace('@', '');
+                    logText = logText.replace('[KULLANICI_ADI]', `@${name}`);
+                }
+                
+                await typeLogMessage(logText);
+            }
+        }
+
+        function showSuccessAnimation() {
+            const overlay = document.getElementById('successOverlay');
+            const successTextElement = document.getElementById('successText');
+            const finalMessage = "VERİ ALIMI TAMAMLANDI!";
+            
+            successTextElement.textContent = '';
+            overlay.classList.remove('hidden');
+
+            let i = 0;
+            const typingInterval = setInterval(() => {
+                if (i < finalMessage.length) {
+                    successTextElement.textContent += finalMessage[i];
+                    playTypeSound(); 
+                    i++;
+                } else {
+                    clearInterval(typingInterval);
+                }
+            }, 50);
+
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    resolve();
+                }, 2000); 
+            });
+        }
+        
+        async function searchProfile() {
+            const name = profileInput.value.trim().toLowerCase().replace('@', ''); 
+            
+            const normalClasses = ['text-accent-green', 'border-color', 'bg-black', 'placeholder-gray-700'];
+            const holdClasses = ['text-white', 'border-white', 'bg-gray-800', 'placeholder-white'];
+
+            if (name.length < 3) {
+                toggleLoading(false);
+                errorMessage.textContent = '[$ HATA: Lütfen geçerli bir kullanıcı adı girin (Min 3 Karakter).]';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            toggleLoading(true); 
+            errorMessage.classList.add('hidden');
+            
+            await startLog(); 
+            
+            // Log bittiğinde titreşimi durdur ve görselleri sabitle
+            stopImageFlicker();
+            
+            await new Promise(resolve => setTimeout(resolve, 1000)); 
+            
+            toggleLoading(false); 
+            
+            await showSuccessAnimation(); 
+            
+            setVolumeGain(0); 
+            
+            const holdDurationMS = 18000; 
+
+            profileInput.disabled = true; 
+            searchButton.disabled = true;
+            protocolSelect.disabled = true;
+
+            profileInput.classList.remove(...normalClasses);
+            profileInput.classList.add(...holdClasses);
+
+            profileInput.placeholder = `>> ANALİZ BAŞLADI. SONUÇLAR BAŞKA BİR BİRİME YÖNLENDİRİLDİ.`;
+            profileInput.value = ''; 
+            
+            await new Promise(resolve => setTimeout(resolve, holdDurationMS));
+
+            profileInput.classList.remove(...holdClasses);
+            profileInput.classList.add(...normalClasses);
+
+            profileInput.placeholder = `>> HEDEF KULLANICI ADI VEYA ID GİRİN (Min 3 Karakter)`;
+            profileInput.disabled = false; 
+            searchButton.disabled = false; 
+            protocolSelect.disabled = false;
+        }
+        
+    </script>
+</body>
+</html>
